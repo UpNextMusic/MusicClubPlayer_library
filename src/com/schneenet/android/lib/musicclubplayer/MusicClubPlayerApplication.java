@@ -14,6 +14,7 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.SharedPreferences.OnSharedPreferenceChangeListener;
 import android.graphics.Bitmap;
+import android.os.Bundle;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
@@ -22,9 +23,8 @@ import com.schneenet.android.lib.musicclubplayer.albumart.AlbumArtRequest;
 import com.schneenet.android.lib.musicclubplayer.albumart.AlbumArtResponse;
 import com.schneenet.android.lib.musicclubplayer.common.LocalBroadcastManager;
 import com.schneenet.android.lib.musicclubplayer.media.Playable;
-import com.schneenet.android.lib.musicclubplayer.media.local.Song;
-import com.schneenet.android.lib.musicclubplayer.playlists.Playlist;
-import com.schneenet.android.lib.musicclubplayer.playlists.PlaylistManager;
+import com.schneenet.android.lib.musicclubplayer.media.Playlist;
+import com.schneenet.android.lib.musicclubplayer.media.PlaylistManager;
 
 /**
  * 
@@ -82,14 +82,27 @@ public abstract class MusicClubPlayerApplication extends Application {
 	/**
 	 * Method called on application start.
 	 * 
-	 * <b>IMPORTANT</b>: If you override this method, you must make a call to super.onCreate()!
+	 * <b>IMPORTANT</b>: You must override this method, you must set mPlaylistManager to your own implementation, and then you must make a call to super.onCreate()!
+	 * <pre>
+	 * @Override
+	 * public void onCreate() {
+	 *     mPlaylistManager = new MyPlaylistManager();
+	 *     super.onCreate();
+	 *     // ... continue application set up
+	 * }
+	 * </pre>
 	 */
 	public void onCreate() {
 		super.onCreate();
+		
+		if (mPlaylistManager == null)
+		{
+			throw new RuntimeException("Application did not define a PlaylistManager implementation.");
+		}
+		
 		mLocalBroadcastManager = LocalBroadcastManager.getInstance(this);
 		mPrefs = PreferenceManager.getDefaultSharedPreferences(this);
 		mObservers = new ArrayList<PlayerObserver>();
-		mPlaylistManager = new PlaylistManager();
 		
 		// Register to receive broadcast events from the PlayerService to send to PlayerObservers
 		IntentFilter filter = new IntentFilter();
@@ -100,26 +113,71 @@ public abstract class MusicClubPlayerApplication extends Application {
 		// Go ahead and start the PlayerService here
 		ensureServiceStarted();
 	}
+	
+	/**
+	 * Request a metadata update from the PlayerService
+	 */
+	public final void requestMetadataUpdate()
+	{
+		Intent updateIntent = new Intent();
+		updateIntent.setAction(PlayerService.ACTION_CONTROL_FORCEUPDATE);
+		mLocalBroadcastManager.sendBroadcast(updateIntent);
+	}
+	
+	/**
+	 * Send a command to the PlayerService
+	 * @param command Command to send
+	 */
+	public final void sendCommand(String command)
+	{
+		sendCommand(command, null);
+	}
+	
+	/**
+	 * Send a command to the PlayerService
+	 * @param command Command to send
+	 * @param arguments Extras to send with the command
+	 */
+	public final void sendCommand(String command, Bundle arguments)
+	{
+		Intent commandIntent = new Intent();
+		commandIntent.setAction(command);
+		if (arguments != null)
+			commandIntent.putExtras(arguments);
+		mLocalBroadcastManager.sendBroadcast(commandIntent);
+	}
 
 	/**
 	 * Add a list of tracks to the currently playing playlist
 	 * @param tracks List of tracks to add
 	 */
-	public void enqueueTracks(ArrayList<Playable> tracks) {
+	public final void enqueueTracks(Playlist tracks) {
 
 		// ENSURE the service is started
 		ensureServiceStarted();
-
-		// BUILD Playlist from list of songs
-		Playlist plist = Playlist.createFromList(tracks);
-		PlaylistManager pManager = new PlaylistManager();
 		
 		// SEND Proper Intent to PlayerService with list of tracks
 		Intent enqueueIntent = new Intent();
 		enqueueIntent.setAction(PlayerService.ACTION_CONTROL_ENQUEUE);
-		enqueueIntent.putExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_SONGS, pManager.serializePlaylist(plist));
+		enqueueIntent.putExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_SONGS, mPlaylistManager.serializePlaylist(tracks));
 		mLocalBroadcastManager.sendBroadcast(enqueueIntent);
 
+	}
+	
+	/**
+	 * Remove a track from the current playlist in the PlaylistService
+	 * @param position Remove the track at this position
+	 */
+	public final void removeFromPlaylist(int position)
+	{
+		// ENSURE Service is running
+		ensureServiceStarted();
+		
+		// SEND Proper Intent to PlayerServce
+		Intent deleteIntent = new Intent();
+		deleteIntent.setAction(PlayerService.ACTION_CONTROL_PLAYLIST_ITEM_DELETE);
+		deleteIntent.putExtra(PlayerService.EXTRA_CONTROL_ITEM_POSITION, position);
+		mLocalBroadcastManager.sendBroadcast(deleteIntent);
 	}
 
 	/**
@@ -128,19 +186,15 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param startingIndex Index of first song to start playing
 	 * @param launchPlayer Should we launch the Player UI?
 	 */
-	public void playTracks(ArrayList<Playable> tracks, int startingIndex, boolean launchPlayer) {
+	public final void playTracks(Playlist tracks, int startingIndex, boolean launchPlayer) {
 		// ENSURE Service is running
 		ensureServiceStarted();
-		
-		// BUILD Playlist from list of songs
-		Playlist plist = Playlist.createFromList(tracks);
-		PlaylistManager pManager = new PlaylistManager();
 
 		// SEND Proper Intent to PlayerService with list of tracks
 		Intent enqueueIntent = new Intent();
 		enqueueIntent.setAction(PlayerService.ACTION_CONTROL_SETPLAYLIST);
 		enqueueIntent.putExtra(PlayerService.EXTRA_CONTROL_STARTINDEX, startingIndex);
-		enqueueIntent.putExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_SONGS, pManager.serializePlaylist(plist));
+		enqueueIntent.putExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_SONGS, mPlaylistManager.serializePlaylist(tracks));
 		mLocalBroadcastManager.sendBroadcast(enqueueIntent);
 
 		if (launchPlayer) {
@@ -154,7 +208,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param startingIndex The index of the song to play
 	 * @param launchPlayer Should we launch the player UI?
 	 */
-	public void playTrackAt(int startingIndex, boolean launchPlayer) {
+	public final void playTrackAt(int startingIndex, boolean launchPlayer) {
 
 		// ENSURE Service is running
 		ensureServiceStarted();
@@ -174,7 +228,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	/**
 	 * Ensure the PlayerService is started and running
 	 */
-	public void ensureServiceStarted() {
+	public final void ensureServiceStarted() {
 		// Ensure service is running
 		Log.i("MusicClubApplication", "Ensuring player service is started...");
 		Intent playerServiceIntent = new Intent(this, PlayerService.class);
@@ -184,7 +238,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	/**
 	 * Stop the PlayerService
 	 */
-	public void stopService() {
+	public final void stopService() {
 		Intent playerServiceIntent = new Intent(this, PlayerService.class);
 		stopService(playerServiceIntent);
 	}
@@ -194,8 +248,8 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param track The track
 	 * @return ArrayList of Song
 	 */
-	public static ArrayList<Song> singleTrackSonglist(Song track) {
-		ArrayList<Song> list = new ArrayList<Song>();
+	public final static ArrayList<Playable> singleTrackSonglist(Playable track) {
+		ArrayList<Playable> list = new ArrayList<Playable>();
 		list.add(track);
 		return list;
 	}
@@ -205,19 +259,39 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param track The track
 	 * @return Playlist object
 	 */
-	public static Playlist singleTrackPlaylist(Song track)
+	/*
+	public final static Playlist singleTrackPlaylist(Playable track)
 	{
 		Playlist plist = new Playlist();
 		plist.addSong(track);
 		return plist;
 	}
+	*/
 
 	/**
 	 * Get singleton instance of the LocalBroadcastManager implemented by this library
-	 * @return
+	 * @return LocalBroadcastManager instance
 	 */
-	public LocalBroadcastManager getLocalBroadcastManager() {
+	public final LocalBroadcastManager getLocalBroadcastManager() {
 		return mLocalBroadcastManager;
+	}
+	
+	/**
+	 * Get singleton instance of the PlaylistManager implemented by the application
+	 * @return PlaylistManager implementation instance
+	 */
+	public final PlaylistManager getPlaylistManager() {
+		return mPlaylistManager;
+	}
+	
+	/**
+	 * Set singleton instance of the PlaylistManager implemented by the application
+	 * <b>IMPORTANT</b>: Must be called in the overridden onCreate() method prior to the call to super.onCreate().
+	 * @param pm Application implemented instance of the PlaylistManager interface
+	 */
+	protected final void setPlaylistManager(PlaylistManager pm)
+	{
+		mPlaylistManager = pm;
 	}
 	
 	/**
@@ -225,7 +299,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param key Key of preference
 	 * @param value Value to save
 	 */
-	public void setPreferenceString(String key, String value)
+	public final void setPreferenceString(String key, String value)
 	{
 		mPrefs.edit().putString(key, value).commit();
 	}
@@ -235,7 +309,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param key Key of preference
 	 * @return Saved preference value or an empty string if the key does not exist 
 	 */
-	public String getPreferenceString(String key)
+	public final String getPreferenceString(String key)
 	{
 		return getPreferenceString(key, "");
 	}
@@ -246,7 +320,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param defaultValue Default value if the key is not found
 	 * @return Saved preference value or defaultValue if the key is not found
 	 */
-	public String getPreferenceString(String key, String defaultValue)
+	public final String getPreferenceString(String key, String defaultValue)
 	{
 		return mPrefs.getString(key, defaultValue);
 	}
@@ -256,7 +330,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param key Key of preference
 	 * @param value Value to save
 	 */
-	public void setPreferenceBoolean(String key, boolean value)
+	public final void setPreferenceBoolean(String key, boolean value)
 	{
 		mPrefs.edit().putBoolean(key, value).commit();
 	}
@@ -267,7 +341,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param defaultValue Default value if the key is not found
 	 * @return Saved preference value or defaultValue if the key is not found
 	 */
-	public boolean getPreferenceBoolean(String key, boolean defaultValue)
+	public final boolean getPreferenceBoolean(String key, boolean defaultValue)
 	{
 		return mPrefs.getBoolean(key, defaultValue);
 	}
@@ -276,7 +350,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * Convenience method for calling SharedPreferences.registerOnSharedPreferenceChangeListener(OnSharedPreferenceChangeListener listener)
 	 * @param listener
 	 */
-	public void registerOnSharedPreferenceChangeListener(OnSharedPreferenceChangeListener listener)
+	public final void registerOnSharedPreferenceChangeListener(OnSharedPreferenceChangeListener listener)
 	{
 		mPrefs.registerOnSharedPreferenceChangeListener(listener);
 	}
@@ -285,7 +359,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * Register to receive simple callbacks from the PlayerService
 	 * @param cb PlayerObserver callbacks class
 	 */
-	public void registerPlayerObserver(PlayerObserver cb)
+	public final void registerPlayerObserver(PlayerObserver cb)
 	{
 		mObservers.add(cb);
 	}
@@ -294,7 +368,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * Unregister a previously registered PlayerObserver
 	 * @param cb PlayerObserver callbacks class
 	 */
-	public void unregisterPlayerObserver(PlayerObserver cb)
+	public final void unregisterPlayerObserver(PlayerObserver cb)
 	{
 		mObservers.remove(cb);
 	}
@@ -304,7 +378,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param br BroadcastReceiver to use
 	 * @param filter IntentFilter to use
 	 */
-	public void registerLocalBroadcastReceiver(BroadcastReceiver br, IntentFilter filter)
+	public final void registerLocalBroadcastReceiver(BroadcastReceiver br, IntentFilter filter)
 	{
 		mLocalBroadcastManager.registerReceiver(br, filter);
 	}
@@ -313,7 +387,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * Convenience method for calling LocalBroadcastManager.unregisterReceiver(BroadcastReceiver br)
 	 * @param br BroadcastReceiver to use
 	 */
-	public void unregisterLocalBroadcastReceiver(BroadcastReceiver br)
+	public final void unregisterLocalBroadcastReceiver(BroadcastReceiver br)
 	{
 		mLocalBroadcastManager.unregisterReceiver(br);
 	}
@@ -326,7 +400,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 	 * @param artUrl Load this url
 	 * @param cb Callback to receive the loaded image
 	 */
-	public void fetchArtImage(final String artUrl, final ArtLoaderCallback cb) {
+	public final void fetchArtImage(final String artUrl, final ArtLoaderCallback cb) {
 		if (artCache.containsKey(artUrl)) {
 			cb.onArtLoaded(artCache.get(artUrl));
 		} else {

@@ -1,6 +1,6 @@
 package com.schneenet.android.lib.musicclubplayer;
 
-import com.schneenet.android.lib.musicclubplayer.playlists.Playlist;
+import com.schneenet.android.lib.musicclubplayer.media.Playlist;
 
 /**
  * Interface that is used to inform player UIs about state changes

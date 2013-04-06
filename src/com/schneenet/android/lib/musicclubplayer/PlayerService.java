@@ -1,12 +1,5 @@
 package com.schneenet.android.lib.musicclubplayer;
 
-import java.io.File;
-import java.io.FileNotFoundException;
-import java.io.FileReader;
-import java.io.FileWriter;
-import java.io.IOException;
-import java.util.List;
-
 import android.app.Application;
 import android.app.Service;
 import android.content.BroadcastReceiver;
@@ -21,7 +14,6 @@ import android.media.MediaPlayer;
 import android.media.MediaPlayer.OnCompletionListener;
 import android.media.MediaPlayer.OnErrorListener;
 import android.os.Bundle;
-import android.os.Environment;
 import android.os.Handler;
 import android.os.IBinder;
 import android.os.PowerManager;
@@ -32,8 +24,8 @@ import android.view.KeyEvent;
 
 import com.schneenet.android.lib.musicclubplayer.common.LocalBroadcastManager;
 import com.schneenet.android.lib.musicclubplayer.media.Playable;
-import com.schneenet.android.lib.musicclubplayer.playlists.Playlist;
-import com.schneenet.android.lib.musicclubplayer.playlists.PlaylistManager;
+import com.schneenet.android.lib.musicclubplayer.media.Playlist;
+import com.schneenet.android.lib.musicclubplayer.media.PlaylistManager;
 
 public class PlayerService extends Service {
 
@@ -50,8 +42,6 @@ public class PlayerService extends Service {
 	public static final String EXTRA_META_REPEAT = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_REPEAT";
 	public static final String EXTRA_META_RUNNING = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_RUNNING";
 	public static final String EXTRA_META_PLAYING = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_PLAYING";
-	public static final String EXTRA_META_PLAYLIST_TYPE = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_PLAYLIST_TYPE";
-	public static final String EXTRA_META_PLAYLIST_UID = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_PLAYLIST_UID";
 	public static final String EXTRA_META_PLAYLIST = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_PLAYLIST";
 
 	// Progress Update Action
@@ -68,8 +58,8 @@ public class PlayerService extends Service {
 	public static final String ACTION_CONTROL_TOGGLESHUFFLE = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_TOGGLESHUFFLE";
 	public static final String ACTION_CONTROL_TOGGLEREPEAT = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_TOGGLEREPEAT";
 	public static final String ACTION_CONTROL_REQUESTSEEK = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_REQUESTSEEK";
-	public static final String ACTION_CONTROL_FORCEUPDATE = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_FORCEUPDATE";
 	public static final String EXTRA_CONTROL_SEEKVALUE = "com.schneenet.android.lib.musicclubplayer.EXTRA_CONTROL_SEEKVALUE";
+	public static final String ACTION_CONTROL_FORCEUPDATE = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_FORCEUPDATE";
 	public static final String ACTION_CONTROL_ENQUEUE = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_ENQUEUE";
 	public static final String ACTION_CONTROL_SETPLAYLIST = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_SETPLAYLIST";
 	public static final String ACTION_CONTROL_PLAY_TRACK = "com.schneenet.android.lib.musicclubplayer.EXTRA_CONTROL_PLAY_TRACK";
@@ -78,6 +68,8 @@ public class PlayerService extends Service {
 	public static final String EXTRA_CONTROL_ENQUEUE_TYPE = "com.schneenet.android.lib.musicclubplayer.EXTRA_CONTROL_ENQUEUE_TYPE";
 	public static final String EXTRA_CONTROL_ENQUEUE_UID = "com.schneenet.android.lib.musicclubplayer.EXTRA_CONTROL_ENQUEUE_UID";
 	public static final String ACTION_CONTROL_SHUTDOWN = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_SHUTDOWN";
+	public static final String ACTION_CONTROL_PLAYLIST_ITEM_DELETE = "com.schneenet.android.lib.musicclubplayer.ACTION_CONTROL_PLAYLIST_ITEM_DELETE";
+	public static final String EXTRA_CONTROL_ITEM_POSITION = "com.schneenet.android.lib.musicclubplayer.EXTRA_CONTROL_ITEM_POSITION";
 
 	// Settings relevant to the Player Service
 	public static final String PREFS_LAST_PLAYLIST = "com.schneenet.android.lib.musicclubplayer.PlayerService.PREFS_LAST_PLAYLIST";
@@ -90,7 +82,7 @@ public class PlayerService extends Service {
 	private boolean autostart = true;
 
 	private MediaPlayer mp = new MediaPlayer();
-	private Playlist mPlaylist = new Playlist();
+	private Playlist mPlaylist;
 	private int playlistIndex; // ONLY FOR USE WITH MOVING BETWEEN SONGS, DO NOT
 								// DISPLAY!
 	private Playable nowPlaying; // Use for displaying metadata, use this to find
@@ -143,14 +135,14 @@ public class PlayerService extends Service {
 		}
 		else
 		{
-			//throw new 
+			throw new ClassCastException("Application class must inherit from MusicClubPlayerApplication to use this service.");
 		}
 		
 		// Get a reference to the LocalBroadcastManager
-		mLocalBroadcastManager = LocalBroadcastManager.getInstance(this);
+		mLocalBroadcastManager = mApplicationObj.getLocalBroadcastManager();
 
 		// Get a PlaylistManager
-		mPlaylistManager = new PlaylistManager();
+		mPlaylistManager = mApplicationObj.getPlaylistManager();
 
 		// Read old state data from prefs
 		repeatAll = mApplicationObj.getPreferenceBoolean(PlayerService.PREFS_REPEAT_STATE, false);
@@ -372,8 +364,8 @@ public class PlayerService extends Service {
 		metaUpdate.putExtra(PlayerService.EXTRA_META_SHUFFLE, shufflePL);
 		metaUpdate.putExtra(PlayerService.EXTRA_META_RUNNING, running);
 		metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYING, running && mp.isPlaying());
-		metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST_TYPE, mPlaylist.getType());
-		metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST_UID, mPlaylist.getUid());
+		// TODO metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST_TYPE, mPlaylist.getType());
+		// TODO metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST_UID, mPlaylist.getUid());
 		metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST, mPlaylistManager.serializePlaylist(mPlaylist));
 		mLocalBroadcastManager.sendBroadcast(metaUpdate);
 	}
@@ -387,7 +379,7 @@ public class PlayerService extends Service {
 					return;
 				}
 			}
-			playSong(mPlaylist.getSong(playlistIndex, shufflePL));
+			playSong(mPlaylist.getTrack(playlistIndex, shufflePL));
 		}
 	}
 
@@ -400,7 +392,7 @@ public class PlayerService extends Service {
 				else
 					playlistIndex = 0;
 			}
-			playSong(mPlaylist.getSong(playlistIndex, shufflePL));
+			playSong(mPlaylist.getTrack(playlistIndex, shufflePL));
 		}
 	}
 
@@ -410,7 +402,7 @@ public class PlayerService extends Service {
 	// Use addToPlaylist() to avoid this.
 	// * Also, if the start index is not the current index, it will
 	// automatically restart at the new index.
-	private void setPlaylist(Playlist newPlaylist, boolean as, int startIndex, String plType, String plUid) {
+	private void setPlaylist(Playlist newPlaylist, boolean as, int startIndex) {
 		if ((!mPlaylist.isSamePlaylist(newPlaylist) || startIndex != playlistIndex) && newPlaylist.size() > 0) {
 			// Playlist is different, or we are starting with a different index
 			
@@ -430,16 +422,16 @@ public class PlayerService extends Service {
 	}
 
 	// Just add the songs, it is up to the activities to start playback.
-	private void addToPlaylist(List<Playable> moreSongs) {
-		mPlaylist.addSongs(moreSongs);
+	private void addToPlaylist(Playlist moreSongs) {
+		mPlaylist.append(moreSongs);
 		sendMetadataBroadcast();
 	}
 
 	// Jump to the song at the index and play it
 	private void playTrackAt(boolean as, int startIndex) {
-		nowPlaying = mPlaylist.getSong(startIndex, false);
+		nowPlaying = mPlaylist.getTrack(startIndex, false);
 		if (nowPlaying != null) {
-			playlistIndex = mPlaylist.getSongPosition(nowPlaying, shufflePL);
+			playlistIndex = mPlaylist.getTrackPosition(nowPlaying, shufflePL);
 			updateMetadata();
 			autostart = as;
 			playSong(nowPlaying);
@@ -455,7 +447,7 @@ public class PlayerService extends Service {
 
 	private boolean toggleShuffle() {
 		shufflePL = !shufflePL;
-		playlistIndex = mPlaylist.syncPlaylistPosition(shufflePL, nowPlaying);
+		playlistIndex = mPlaylist.getTrackPosition(nowPlaying, shufflePL);
 		updateMetadata();
 		mApplicationObj.setPreferenceBoolean(PlayerService.PREFS_SHUFFLE_STATE, shufflePL);
 		return shufflePL;
@@ -472,50 +464,15 @@ public class PlayerService extends Service {
 
 	// Save the NowPlaying to a JSON file
 	private void saveLastPlaylist() {
-		FileWriter fw;
-		try {
-			File defaultPlaylistFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "playlists" + File.separator + "mc_default.json");
-			if (!defaultPlaylistFile.exists()) {
-				defaultPlaylistFile.getParentFile().mkdirs();
-				// defaultPlaylistFile.createNewFile();
-			}
-			fw = new FileWriter(defaultPlaylistFile);
-			mPlaylistManager.serializePlaylistToStream(mPlaylist, fw);
-			fw.flush();
-			fw.close();
-		} catch (IOException e) {
-			Log.e(TAG, "IOExcpetion while trying to save the default playlist:", e);
-		} catch (NullPointerException e) {
-			Log.e(TAG, e.getMessage(), e);
-		}
+		mApplicationObj.setPreferenceString(PREFS_LAST_PLAYLIST, mPlaylistManager.serializePlaylist(mPlaylist));
 	}
 
 	// Load the NowPlaing from a JSON file
 	private void loadLastPlaylist() {
-		FileReader fr = null;
-		try {
-			try {
-				File defaultPlaylistFile = new File(Environment.getExternalStorageDirectory().getAbsolutePath() + File.separator + "playlists" + File.separator + "mc_default.json");
-				fr = new FileReader(defaultPlaylistFile);
-
-				Playlist pl = mPlaylistManager.deserializePlaylist(fr);
-				if (pl != null) {
-					setPlaylist(pl, false, 0, pl.getType(), pl.getUid());
-				}
-
-			} finally {
-				if (fr != null) {
-					fr.close();
-				}
-			}
-		} catch (FileNotFoundException e) {
-			Log.e(TAG, e.getMessage(), e);
-		} catch (IOException e) {
-			Log.e(TAG, e.getMessage(), e);
-		} catch (NullPointerException e) {
-			Log.e(TAG, e.getMessage(), e);
+		Playlist pl = mPlaylistManager.deserializePlaylist(mApplicationObj.getPreferenceString(PREFS_LAST_PLAYLIST, ""));
+		if (pl != null) {
+			setPlaylist(pl, false, 0);
 		}
-
 	}
 
 	// Shut the service down
@@ -634,13 +591,11 @@ public class PlayerService extends Service {
 				updateMetadata();
 			} else if (action.equals(PlayerService.ACTION_CONTROL_ENQUEUE)) {
 				final Playlist playlist = mPlaylistManager.deserializePlaylist(intent.getStringExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_SONGS)); 
-				addToPlaylist(playlist.getSongList());
+				addToPlaylist(playlist);
 			} else if (action.equals(PlayerService.ACTION_CONTROL_SETPLAYLIST)) {
 				final Playlist playlist = mPlaylistManager.deserializePlaylist(intent.getStringExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_SONGS));
 				final int startIndex = intent.getIntExtra(PlayerService.EXTRA_CONTROL_STARTINDEX, 0);
-				final String playlistType = intent.getStringExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_TYPE);
-				final String playlistUid = intent.getStringExtra(PlayerService.EXTRA_CONTROL_ENQUEUE_UID);
-				setPlaylist(playlist, true, startIndex, playlistType, playlistUid);
+				setPlaylist(playlist, true, startIndex);
 			} else if (action.equals(PlayerService.ACTION_CONTROL_PLAY_TRACK)) {
 				final int startIndex = intent.getIntExtra(PlayerService.EXTRA_CONTROL_STARTINDEX, 0);
 				stopPlayer();

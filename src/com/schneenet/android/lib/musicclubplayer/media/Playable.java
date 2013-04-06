@@ -2,7 +2,7 @@ package com.schneenet.android.lib.musicclubplayer.media;
 
 public interface Playable
 {
-
+	
 	public String getUrl();
 	
 	public float getLength();
@@ -16,7 +16,5 @@ public interface Playable
 	public String getAlbum();
 	
 	public String getArtUrl();
-	
-	public Playable buildFromKey(String key);
 	
 }
