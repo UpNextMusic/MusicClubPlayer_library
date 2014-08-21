@@ -42,7 +42,11 @@ public class PlayerService extends Service {
 	public static final String EXTRA_META_REPEAT = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_REPEAT";
 	public static final String EXTRA_META_RUNNING = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_RUNNING";
 	public static final String EXTRA_META_PLAYING = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_PLAYING";
-	public static final String EXTRA_META_PLAYLIST = "com.schneenet.android.lib.musicclubplayer.EXTRA_META_PLAYLIST";
+	
+	// Playlist Update Action
+	public static final String ACTION_PLAYLIST_UPDATE = "com.schneenet.android.lib.musicclubplayer.ACTION_PLAYLIST_UPDATE";
+	public static final String EXTRA_PLAYLIST_DATA = "com.schneenet.android.lib.musicclubplayer.EXTRA_PLAYLIST_DATA";
+	public static final String EXTRA_PLAYLIST_INDEX = "com.schneenet.android.lib.musicclubplayer.EXTRA_PLAYLIST_INDEX";
 
 	// Progress Update Action
 	public static final String ACTION_PROGRESS_UPDATE = "com.schneenet.android.lib.musicclubplayer.ACTION_PROGRESS_UPDATE";
@@ -143,6 +147,7 @@ public class PlayerService extends Service {
 
 		// Get a PlaylistManager
 		mPlaylistManager = mApplicationObj.getPlaylistManager();
+		mPlaylist = mPlaylistManager.newInstance();
 
 		// Read old state data from prefs
 		repeatAll = mApplicationObj.getPreferenceBoolean(PlayerService.PREFS_REPEAT_STATE, false);
@@ -327,7 +332,7 @@ public class PlayerService extends Service {
 	}
 
 	private void updateMetadata() {
-		if (mPlaylist.size() > 0 && playlistIndex < mPlaylist.size() && nowPlaying != null) {
+		if (mPlaylist != null && mPlaylist.size() > 0 && playlistIndex < mPlaylist.size() && nowPlaying != null) {
 
 			songName = nowPlaying.getName();
 			songArtist = nowPlaying.getArtist();
@@ -347,6 +352,7 @@ public class PlayerService extends Service {
 			songArtist = "";
 			songAlbum = "";
 		}
+		sendPlaylistBroadcast();
 		sendMetadataBroadcast();
 	}
 
@@ -364,10 +370,16 @@ public class PlayerService extends Service {
 		metaUpdate.putExtra(PlayerService.EXTRA_META_SHUFFLE, shufflePL);
 		metaUpdate.putExtra(PlayerService.EXTRA_META_RUNNING, running);
 		metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYING, running && mp.isPlaying());
-		// TODO metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST_TYPE, mPlaylist.getType());
-		// TODO metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST_UID, mPlaylist.getUid());
-		metaUpdate.putExtra(PlayerService.EXTRA_META_PLAYLIST, mPlaylistManager.serializePlaylist(mPlaylist));
 		mLocalBroadcastManager.sendBroadcast(metaUpdate);
+	}
+	
+	private void sendPlaylistBroadcast()
+	{
+		Intent playlistUpdate = new Intent();
+		playlistUpdate.setAction(PlayerService.ACTION_PLAYLIST_UPDATE);
+		playlistUpdate.putExtra(PlayerService.EXTRA_PLAYLIST_DATA, mPlaylistManager.serializePlaylist(mPlaylist));
+		playlistUpdate.putExtra(PlayerService.EXTRA_PLAYLIST_INDEX, mPlaylist.getTrackPosition(nowPlaying, shufflePL));
+		mLocalBroadcastManager.sendBroadcast(playlistUpdate);
 	}
 
 	private void nextSong() {
@@ -403,7 +415,7 @@ public class PlayerService extends Service {
 	// * Also, if the start index is not the current index, it will
 	// automatically restart at the new index.
 	private void setPlaylist(Playlist newPlaylist, boolean as, int startIndex) {
-		if ((!mPlaylist.isSamePlaylist(newPlaylist) || startIndex != playlistIndex) && newPlaylist.size() > 0) {
+		if (((!mPlaylist.isSamePlaylist(newPlaylist) || startIndex != playlistIndex) && newPlaylist.size() > 0)) {
 			// Playlist is different, or we are starting with a different index
 			
 			// Stop currently playing
@@ -424,6 +436,7 @@ public class PlayerService extends Service {
 	// Just add the songs, it is up to the activities to start playback.
 	private void addToPlaylist(Playlist moreSongs) {
 		mPlaylist.append(moreSongs);
+		sendPlaylistBroadcast();
 		sendMetadataBroadcast();
 	}
 
@@ -470,7 +483,8 @@ public class PlayerService extends Service {
 	// Load the NowPlaing from a JSON file
 	private void loadLastPlaylist() {
 		Playlist pl = mPlaylistManager.deserializePlaylist(mApplicationObj.getPreferenceString(PREFS_LAST_PLAYLIST, ""));
-		if (pl != null) {
+		if (pl != null)
+		{
 			setPlaylist(pl, false, 0);
 		}
 	}
@@ -480,7 +494,6 @@ public class PlayerService extends Service {
 		try {
 			mp.stop();
 		} catch (Exception ex) {
-			
 		}
 		wakeLock.release();
 		unregisterRemoteControl();

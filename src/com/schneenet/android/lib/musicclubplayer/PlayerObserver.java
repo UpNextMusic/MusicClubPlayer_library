@@ -22,7 +22,7 @@ public interface PlayerObserver
 	 * @param shuffle
 	 * @param playlist
 	 */
-	public void onMetaDataUpdate(String title, String artist, String album, String albumArtUrl, String track, String trackOf, boolean playing, boolean repeat, boolean shuffle, Playlist playlist);
+	public void onMetaDataUpdate(String title, String artist, String album, String albumArtUrl, String track, String trackOf, boolean playing, boolean repeat, boolean shuffle);
 	
 	/**
 	 * Called when the progress changes (buffering, periodically when playing)

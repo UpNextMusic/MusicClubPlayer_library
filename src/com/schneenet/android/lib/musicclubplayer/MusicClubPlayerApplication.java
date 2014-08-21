@@ -60,10 +60,18 @@ public abstract class MusicClubPlayerApplication extends Application {
 				final boolean repeat = intent.getBooleanExtra(PlayerService.EXTRA_META_REPEAT, false);
 				final boolean shuffle = intent.getBooleanExtra(PlayerService.EXTRA_META_SHUFFLE, false);
 				final boolean playing = intent.getBooleanExtra(PlayerService.EXTRA_META_PLAYING, false);
-				final Playlist playlist = mPlaylistManager.deserializePlaylist(intent.getStringExtra(PlayerService.EXTRA_META_PLAYLIST));
 				for ( PlayerObserver obs : mObservers )
 				{
-					obs.onMetaDataUpdate(title, artist, album, albumArtUrl, track, trackOf, playing, repeat, shuffle, playlist);
+					obs.onMetaDataUpdate(title, artist, album, albumArtUrl, track, trackOf, playing, repeat, shuffle);
+				}
+			}
+			else if (action.equals(PlayerService.ACTION_PLAYLIST_UPDATE))
+			{
+				final Playlist playlist = mPlaylistManager.deserializePlaylist(intent.getStringExtra(PlayerService.EXTRA_PLAYLIST_DATA));
+				final int index = intent.getIntExtra(PlayerService.EXTRA_PLAYLIST_INDEX, 0);
+				for ( PlayerObserver obs : mObservers )
+				{
+					obs.onPlaylistUpdate(playlist, index);
 				}
 			}
 			else if (action.equals(PlayerService.ACTION_PROGRESS_UPDATE))
@@ -108,6 +116,7 @@ public abstract class MusicClubPlayerApplication extends Application {
 		IntentFilter filter = new IntentFilter();
 		filter.addAction(PlayerService.ACTION_META_UPDATE);
 		filter.addAction(PlayerService.ACTION_PROGRESS_UPDATE);
+		filter.addAction(PlayerService.ACTION_PLAYLIST_UPDATE);
 		registerLocalBroadcastReceiver(mObserverReceiver, filter);
 		
 		// Go ahead and start the PlayerService here
